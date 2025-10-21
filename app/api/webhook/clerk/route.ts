@@ -7,8 +7,8 @@ import type { WebhookEvent } from "@clerk/nextjs/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { createUser, updateUser, deleteUser } from "@/actions/user.actions";
 
-export const runtime = "nodejs";          // → stabil di Node
-export const dynamic = "force-dynamic";   // → jangan di-cache
+export const runtime = "nodejs"; // → stabil di Node
+export const dynamic = "force-dynamic"; // → jangan di-cache
 
 export async function POST(req: Request) {
   // LOG PALING AWAL (biar kelihatan di Vercel fungsi ini jalan)
@@ -60,7 +60,10 @@ export async function POST(req: Request) {
       public_metadata,
     } = data;
 
-    if (!email_addresses?.length) return new Response("No email", { status: 400 });
+    if (!email_addresses?.length)
+      return new Response("No email", { status: 400 });
+
+    const role = (public_metadata?.role as string) ?? "admin";
 
     const user = {
       clerkId: id,
@@ -68,7 +71,7 @@ export async function POST(req: Request) {
       firstName: first_name || "",
       lastName: last_name || "",
       photo: image_url,
-      role: (public_metadata?.role as string) || "admin",
+      role, // simpan juga ke DB
     };
 
     console.log("Creating user:", user);
@@ -78,7 +81,11 @@ export async function POST(req: Request) {
       try {
         const clerkClientInstance = await clerkClient();
         const result = await clerkClientInstance.users.updateUserMetadata(id, {
-          publicMetadata: { userId: newUser._id, ...public_metadata },
+          publicMetadata: {
+            ...public_metadata, // kalau ada yang lain, tetap dipertahankan
+            role, 
+            userId: newUser._id.toString(),
+          },
         });
         console.log("✅ Clerk metadata updated:", result.publicMetadata);
       } catch (e) {
@@ -111,7 +118,7 @@ export async function POST(req: Request) {
   if (eventType === "user.deleted") {
     const data = evt.data as any;
     try {
-      const deleted = await deleteUser(data.id); 
+      const deleted = await deleteUser(data.id);
       return NextResponse.json({ ok: true, user: deleted });
     } catch (e) {
       console.error("deleteUser failed:", e);
