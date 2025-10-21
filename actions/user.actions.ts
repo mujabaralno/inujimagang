@@ -88,28 +88,6 @@ export async function getAllUser() {
   }
 }
 
-//READ BY ID
-
-export async function getUsersByOrganizationId(organizationId: string) {
-  try {
-    await connectToDatabase();
-
-    const users = await User.find({ organizationId });
-
-    return users.map((user) => ({
-      _id: user._id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      img: user.photo,
-      dateJoined: user.createdAt.toLocaleDateString(),
-      role: user.role,
-    }));
-  } catch (error) {
-    console.error("Failed to get users by organizationId:", error);
-    return [];
-  }
-}
 
 // UPDATE
 export async function updateUser(clerkId: string, user: UpdateUserParams) {

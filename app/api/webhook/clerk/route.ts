@@ -50,13 +50,13 @@ export async function POST(req: Request) {
   // Get the ID and type of the event
   const { id } = evt.data;
   const eventType = evt.type;
-  
+
   console.log(`🎯 Processing webhook: ${eventType} for ID: ${id}`);
 
   // CREATE
   if (eventType === "user.created") {
     console.log("📦 Webhook user.created payload:", evt.data);
-    
+
     const {
       id,
       email_addresses,
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
       last_name,
       public_metadata,
     } = evt.data;
-    
+
     console.log("📦 public_metadata:", public_metadata);
 
     // Validation - pastikan email_addresses tidak kosong
@@ -82,23 +82,23 @@ export async function POST(req: Request) {
       firstName: first_name || "",
       lastName: last_name || "",
       photo: image_url,
-      role: role || "user",
+      role: role || "admin",
     };
 
     console.log("👤 Creating user with data:", user);
 
     try {
       const newUser = await createUser(user);
-      
+
       if (!newUser) {
         console.error("❌ createUser returned null/undefined");
         return new Response("Failed to create user - no result returned", {
           status: 500,
         });
       }
-      
+
       console.log("✅ User successfully created in DB:", newUser);
-      
+
       // Update Clerk metadata
       try {
         const clerkClientInstance = await clerkClient();
@@ -107,24 +107,26 @@ export async function POST(req: Request) {
         });
         console.log("✅ Clerk metadata updated:", result.publicMetadata);
       } catch (metadataError) {
-        console.error("⚠️ Failed to update Clerk metadata (non-fatal):", metadataError);
+        console.error(
+          "⚠️ Failed to update Clerk metadata (non-fatal):",
+          metadataError
+        );
         // Don't fail the webhook for metadata update errors
       }
-      
-      return NextResponse.json({ 
-        message: "OK", 
+
+      return NextResponse.json({
+        message: "OK",
         user: newUser,
-        userId: newUser._id 
+        userId: newUser._id,
       });
-      
     } catch (err) {
       console.error("🔥 Failed to create user:", err);
       console.error("🔥 Error details:", {
-        message: err instanceof Error ? err.message : 'Unknown error',
+        message: err instanceof Error ? err.message : "Unknown error",
         stack: err instanceof Error ? err.stack : undefined,
-        userData: user
+        userData: user,
       });
-      
+
       return new Response("Error occurred during user creation", {
         status: 500,
       });
@@ -134,7 +136,7 @@ export async function POST(req: Request) {
   // UPDATE
   if (eventType === "user.updated") {
     console.log("📝 Processing user.updated for ID:", id);
-    
+
     const {
       id: updatedUserId,
       image_url,
@@ -142,7 +144,7 @@ export async function POST(req: Request) {
       last_name,
       public_metadata,
     } = evt.data;
-    
+
     const approved = (public_metadata?.approved as boolean) || false;
 
     const user = {
@@ -165,7 +167,7 @@ export async function POST(req: Request) {
   // DELETE
   if (eventType === "user.deleted") {
     console.log("🗑️ Processing user.deleted for ID:", id);
-    
+
     const { id: deletedUserId } = evt.data;
 
     try {
