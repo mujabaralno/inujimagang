@@ -35,7 +35,7 @@ export async function createUser(user: CreateUserParams) {
       photo: user.photo || "",
       firstName: user.firstName || "",
       lastName: user.lastName || "",
-      role: user.role || "user",
+      role: user.role || "admin",
     });
 
     console.log("✅ User created successfully:", newUser);
