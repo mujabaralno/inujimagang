@@ -1,62 +1,56 @@
-import { clerkClient, WebhookEvent } from "@clerk/nextjs/server";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// app/webhook/clerk/route.ts (App Router)
+import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { Webhook } from "svix";
+import type { WebhookEvent } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
+import { createUser, updateUser, deleteUser } from "@/actions/user.actions";
 
-import { createUser, deleteUser, updateUser } from "@/actions/user.actions";
+export const runtime = "nodejs";          // → stabil di Node
+export const dynamic = "force-dynamic";   // → jangan di-cache
 
 export async function POST(req: Request) {
+  // LOG PALING AWAL (biar kelihatan di Vercel fungsi ini jalan)
+  console.log("→ /webhook/clerk: request masuk");
+
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SIGNING_SECRET;
-
   if (!WEBHOOK_SECRET) {
-    throw new Error(
-      "Please add CLERK_WEBHOOK_SIGNING_SECRET from Clerk Dashboard to .env or .env.local"
-    );
+    console.error("Missing CLERK_WEBHOOK_SIGNING_SECRET");
+    return new Response("Misconfigured", { status: 500 });
   }
 
-  // Get the headers - Fix async handling
-  const headerPayload = await headers();
-  const svix_id = headerPayload.get("svix-id");
-  const svix_timestamp = headerPayload.get("svix-timestamp");
-  const svix_signature = headerPayload.get("svix-signature");
-
-  // If there are no headers, error out
+  const h = headers();
+  const svix_id = (await h).get("svix-id");
+  const svix_timestamp = (await h).get("svix-timestamp");
+  const svix_signature = (await h).get("svix-signature");
   if (!svix_id || !svix_timestamp || !svix_signature) {
-    console.error("❌ Missing svix headers");
-    return new Response("Error occurred -- no svix headers", { status: 400 });
+    console.error("No svix headers");
+    return new Response("No svix headers", { status: 400 });
   }
 
-  // Get the body
-  const payload = await req.json();
-  const body = JSON.stringify(payload);
-
-  // Create a new Svix instance with your secret
+  // RAW BODY
+  const payload = await req.text();
   const wh = new Webhook(WEBHOOK_SECRET);
 
   let evt: WebhookEvent;
-
-  // Verify the payload with the headers
   try {
-    evt = wh.verify(body, {
+    evt = wh.verify(payload, {
       "svix-id": svix_id,
       "svix-timestamp": svix_timestamp,
       "svix-signature": svix_signature,
     }) as WebhookEvent;
   } catch (err) {
-    console.error("❌ Error verifying webhook:", err);
-    return new Response("Error occurred during verification", { status: 400 });
+    console.error("Svix verify error:", err);
+    return new Response("Bad signature", { status: 400 });
   }
 
-  // Get the ID and type of the event
-  const { id } = evt.data;
   const eventType = evt.type;
-
-  console.log(`🎯 Processing webhook: ${eventType} for ID: ${id}`);
+  console.log("Webhook type:", eventType);
 
   // CREATE
   if (eventType === "user.created") {
-    console.log("📦 Webhook user.created payload:", evt.data);
-
+    const data = evt.data as any;
     const {
       id,
       email_addresses,
@@ -64,17 +58,9 @@ export async function POST(req: Request) {
       first_name,
       last_name,
       public_metadata,
-    } = evt.data;
+    } = data;
 
-    console.log("📦 public_metadata:", public_metadata);
-
-    // Validation - pastikan email_addresses tidak kosong
-    if (!email_addresses || email_addresses.length === 0) {
-      console.error("❌ No email addresses found in webhook data");
-      return new Response("No email addresses found", { status: 400 });
-    }
-
-    const role = public_metadata?.role as string;
+    if (!email_addresses?.length) return new Response("No email", { status: 400 });
 
     const user = {
       clerkId: id,
@@ -82,106 +68,57 @@ export async function POST(req: Request) {
       firstName: first_name || "",
       lastName: last_name || "",
       photo: image_url,
-      role: role || "admin",
+      role: (public_metadata?.role as string) || "admin",
     };
 
-    console.log("👤 Creating user with data:", user);
+    console.log("Creating user:", user);
 
     try {
       const newUser = await createUser(user);
-
-      if (!newUser) {
-        console.error("❌ createUser returned null/undefined");
-        return new Response("Failed to create user - no result returned", {
-          status: 500,
-        });
-      }
-
-      console.log("✅ User successfully created in DB:", newUser);
-
-      // Update Clerk metadata
       try {
         const clerkClientInstance = await clerkClient();
         const result = await clerkClientInstance.users.updateUserMetadata(id, {
           publicMetadata: { userId: newUser._id, ...public_metadata },
         });
         console.log("✅ Clerk metadata updated:", result.publicMetadata);
-      } catch (metadataError) {
-        console.error(
-          "⚠️ Failed to update Clerk metadata (non-fatal):",
-          metadataError
-        );
-        // Don't fail the webhook for metadata update errors
+      } catch (e) {
+        console.warn("Update Clerk publicMetadata failed:", e);
       }
-
-      return NextResponse.json({
-        message: "OK",
-        user: newUser,
-        userId: newUser._id,
-      });
-    } catch (err) {
-      console.error("🔥 Failed to create user:", err);
-      console.error("🔥 Error details:", {
-        message: err instanceof Error ? err.message : "Unknown error",
-        stack: err instanceof Error ? err.stack : undefined,
-        userData: user,
-      });
-
-      return new Response("Error occurred during user creation", {
-        status: 500,
-      });
+      return NextResponse.json({ ok: true, userId: newUser._id.toString() });
+    } catch (e) {
+      console.error("createUser failed:", e);
+      return new Response("Create failed", { status: 500 });
     }
   }
 
   // UPDATE
   if (eventType === "user.updated") {
-    console.log("📝 Processing user.updated for ID:", id);
-
-    const {
-      id: updatedUserId,
-      image_url,
-      first_name,
-      last_name,
-      public_metadata,
-    } = evt.data;
-
-    const approved = (public_metadata?.approved as boolean) || false;
-
-    const user = {
-      firstName: first_name || "",
-      lastName: last_name || "",
-      photo: image_url,
-      approved,
-    };
-
+    const data = evt.data as any;
     try {
-      const updatedUser = await updateUser(updatedUserId, user);
-      console.log("✅ User updated successfully:", updatedUser);
-      return NextResponse.json({ message: "OK", user: updatedUser });
-    } catch (err) {
-      console.error("❌ Error during user update:", err);
-      return new Response("Error occurred during user update", { status: 500 });
+      const updated = await updateUser(data.id, {
+        firstName: data.first_name || "",
+        lastName: data.last_name || "",
+        photo: data.image_url,
+      });
+      return NextResponse.json({ ok: true, user: updated });
+    } catch (e) {
+      console.error("updateUser failed:", e);
+      return new Response("Update failed", { status: 500 });
     }
   }
 
   // DELETE
   if (eventType === "user.deleted") {
-    console.log("🗑️ Processing user.deleted for ID:", id);
-
-    const { id: deletedUserId } = evt.data;
-
+    const data = evt.data as any;
     try {
-      const deletedUser = await deleteUser(deletedUserId!);
-      console.log("✅ User deleted successfully:", deletedUser);
-      return NextResponse.json({ message: "OK", user: deletedUser });
-    } catch (err) {
-      console.error("❌ Error during user deletion:", err);
-      return new Response("Error occurred during user deletion", {
-        status: 500,
-      });
+      const deleted = await deleteUser(data.id); 
+      return NextResponse.json({ ok: true, user: deleted });
+    } catch (e) {
+      console.error("deleteUser failed:", e);
+      return new Response("Delete failed", { status: 500 });
     }
   }
 
-  console.log(`⚠️ Unhandled webhook type: ${eventType} with ID: ${id}`);
-  return new Response("Webhook received but not processed", { status: 200 });
+  console.log("Unhandled event:", eventType);
+  return NextResponse.json({ ok: true });
 }
