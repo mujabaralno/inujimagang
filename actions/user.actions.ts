@@ -1,0 +1,151 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+
+import User from "@/lib/database/models/user.model";
+import { connectToDatabase } from "@/lib/database/mongoose";
+import { handleError } from "@/utils"; 
+import { CreateUserParams, UpdateUserParams } from "@/types";
+
+
+
+// CREATE
+export async function createUser(user: CreateUserParams) {
+  try {
+    console.log("🔄 Connecting to database...");
+    await connectToDatabase();
+    
+    console.log("🔄 Creating user with data:", user);
+    
+    // Validasi data sebelum create
+    if (!user.clerkId || !user.email) {
+      throw new Error("Missing required fields: clerkId and email are required");
+    }
+    
+    // Check if user already exists
+    const existingUser = await User.findOne({ clerkId: user.clerkId });
+    if (existingUser) {
+      console.log("⚠️ User already exists:", existingUser);
+      return JSON.parse(JSON.stringify(existingUser));
+    }
+
+    const newUser = await User.create({
+      clerkId: user.clerkId,
+      email: user.email,
+      photo: user.photo || "",
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      role: user.role || "user",
+    });
+
+    console.log("✅ User created successfully:", newUser);
+    return JSON.parse(JSON.stringify(newUser));
+    
+  } catch (error) {
+    console.error("🔥 Error in createUser:", error);
+    console.error("🔥 User data that failed:", user);
+    
+    // Re-throw the error so webhook can handle it properly
+    throw error;
+  }
+}
+
+// READ
+export async function getUserById(userId: string) {
+  try {
+    await connectToDatabase();
+
+    const user = await User.findOne({ clerkId: userId });
+
+    if (!user) throw new Error("User not found");
+
+    return JSON.parse(JSON.stringify(user));
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+// in @/actions/user.actions.ts
+export async function getAllUser() {
+  try {
+    await connectToDatabase();
+    
+    const users = await User.find();
+    
+    // Ubah setiap user menjadi plain object dengan ID sebagai string
+    return users.map((user) => ({
+      _id: user._id.toString(), // <<< PENTING: Ubah _id menjadi string
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      img: user.photo,
+      dateJoined: user.createdAt.toISOString(), // Gunakan ISO string untuk konsistensi
+      role: user.role,
+    }));
+  } catch (error) {
+    handleError(error);
+    return [];
+  }
+}
+
+//READ BY ID
+
+export async function getUsersByOrganizationId(organizationId: string) {
+  try {
+    await connectToDatabase();
+
+    const users = await User.find({ organizationId });
+
+    return users.map((user) => ({
+      _id: user._id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      img: user.photo,
+      dateJoined: user.createdAt.toLocaleDateString(),
+      role: user.role,
+    }));
+  } catch (error) {
+    console.error("Failed to get users by organizationId:", error);
+    return [];
+  }
+}
+
+// UPDATE
+export async function updateUser(clerkId: string, user: UpdateUserParams) {
+  try {
+    await connectToDatabase();
+
+    const updatedUser = await User.findOneAndUpdate({ clerkId }, user, {
+      new: true,
+    });
+
+    if (!updatedUser) throw new Error("User update failed");
+
+    return JSON.parse(JSON.stringify(updatedUser));
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+// DELETE
+export async function deleteUser(_id: string) {
+  try {
+    await connectToDatabase();
+
+    // Find user to delete
+    const userToDelete = await User.findOne({ _id });
+
+    if (!userToDelete) {
+      throw new Error("User not found");
+    }
+
+    // Delete user
+    const deletedUser = await User.findByIdAndDelete(userToDelete._id);
+    revalidatePath("/");
+
+    return deletedUser ? JSON.parse(JSON.stringify(deletedUser)) : null;
+  } catch (error) {
+    handleError(error);
+  }
+}
