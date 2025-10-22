@@ -1,36 +1,17 @@
 "use client"
-import { navLinks } from "@/constants";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import React from "react";
 
-const Navbar = () => {
-  const pathname = usePathname();
+const Header = () => {
   return (
-    <header className="w-full sticky top-0 bg-black">
+    <header className="w-full sticky top-0 bg-white shadow-md">
       <div className="w-full max-w-7xl md:mx-auto flex justify-between items-center px-4 py-4">
         <div>
           <h3 className="text-2xl font-semibold text-white">GARUT</h3>
         </div>
-        <div>
-          <ul className="flex flex-col md:flex-row gap-5 w-full">
-            {navLinks.map((item) => {
-              const isActive = pathname == item.route;
-              return (
-                <Link
-                  href={item.route}
-                  key={item.label}
-                  className={`text-md font-medium ${
-                    isActive ? "text-white" : "text-gray-400"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </ul>
-        </div>
+
+         
         <div className="flex justify-end items-center w-40">
             <SignedIn>
                 <UserButton />
@@ -48,4 +29,4 @@ const Navbar = () => {
   );
 };
 
-export default Navbar;
+export default Header;

@@ -1,4 +1,5 @@
-import Sidebar from "@/shared/SideBar";
+import Header from "@/components/shared/Header";
+import Sidebar from "@/components/shared/SideBar";
 
 export default function DashboardLayout({
   children,
@@ -7,14 +8,12 @@ export default function DashboardLayout({
 }>) {
   return (
     <main>
-         <div className="flex bg-[#F8F8FF]">
+      <div className="flex bg-[#F8F8FF]">
         <Sidebar />
 
-        <section className="wrapper">
-
-          <div className="w-full">
-            {children}
-          </div>
+        <section className="w-full">
+          <Header />
+          <div className="w-full">{children}</div>
         </section>
       </div>
     </main>

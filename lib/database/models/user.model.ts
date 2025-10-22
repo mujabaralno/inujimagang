@@ -9,11 +9,11 @@ const UserSchema = new Schema(
     lastName: String,
     role: {
       type: String,
-      enum: ["admin", "superadmin"], // ← tambahkan "user"
+      enum: ["admin", "superadmin"],
       default: "admin",
       required: true,
     },
-    organizationId: { type: String }, // ← kamu pakai di actions
+    organizationId: { type: String },
   },
   { timestamps: true }
 );
