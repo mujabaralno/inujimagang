@@ -36,7 +36,7 @@ export type CreateFacilityInput = {
   capacity?: number;
   picName?: string;
   contact?: ContactInput;
-  categoryId?: string;
+  categoryId: string;
   facilities?: string[];
   status?: FacilityStatus; // default di model: "DIPINJAMKAN"
   location?: LocationInput; // opsional; kalau ada -> disimpan GeoJSON Point
@@ -66,7 +66,7 @@ export type FacilityDTO = {
   contact?: ContactInput;
   facilities: string[];
   status: FacilityStatus;
-  categoryId?: string;
+  categoryId: string;
   category?: { id: string; name: string };
   location?: { lng: number; lat: number };
   createdAt: string; // ISO
