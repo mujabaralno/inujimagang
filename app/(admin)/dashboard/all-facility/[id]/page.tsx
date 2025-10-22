@@ -28,7 +28,7 @@ export default async function FacilityDetailPage({ params }: Props) {
       {/* Hero Section */}
       <section className="relative overflow-hidden rounded-3xl shadow-md">
         <Image
-          src={facility.photoUrl}
+          src={`${facility.photoUrl} | "/next.svg" `}
           alt={facility.name}
           width={100}
           height={100}
